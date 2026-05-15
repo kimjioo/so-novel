@@ -36,22 +36,37 @@ jobs:
           bash bin/release-linux.sh
           cp -r target/sonovel-linux_x64/{app.jar,config.ini,rules} .
 
+      # ================= 新增步骤开始 =================
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      # ================= 新增步骤结束 =================
+
       # 登录 GHCR
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      # 构建并推送 Docker 镜像到 GHCR
+      # 修改：使用 buildx 构建并推送多架构 Docker 镜像
       - name: Build and Push Docker image
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/sonovel
-          echo "Building Docker image $IMAGE_NAME:$VERSION ..."
-          docker build -t $IMAGE_NAME:$VERSION -t $IMAGE_NAME:latest .
-          docker push $IMAGE_NAME:$VERSION
-          docker push $IMAGE_NAME:latest  
+          echo "Building Docker image $IMAGE_NAME:$VERSION for amd64 and arm64..."
+          
+          # 使用 buildx 替代普通的 docker build
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t $IMAGE_NAME:$VERSION \
+            -t $IMAGE_NAME:latest \
+            --push .  
 
       # 输出镜像地址
       - name: Output image info
         run: |
+          VERSION=${GITHUB_REF_NAME#v}
           IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/sonovel
           echo "Docker image published: ${IMAGE_NAME}:$VERSION"
